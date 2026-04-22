@@ -283,7 +283,6 @@ select option { background: var(--s3); }
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 // ── DADOS INICIAIS ──
 const INITIAL_ITEMS = [
@@ -490,57 +489,249 @@ async function exportPNG() {
   btn.innerHTML = '⏳ Gerando...';
   btn.disabled = true;
 
-  // Hide buttons during capture
-  const allBtns = document.querySelectorAll('button');
-  allBtns.forEach(b => b.style.visibility = 'hidden');
-
-  // Scroll to top
-  window.scrollTo(0, 0);
-
-  // Wait for everything to settle
-  await new Promise(r => setTimeout(r, 400));
-
-  const page = document.querySelector('.page');
+  await new Promise(r => setTimeout(r, 100));
 
   try {
-    const canvas = await html2canvas(page, {
-      backgroundColor: '#080f0b',
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      scrollX: 0,
-      scrollY: 0,
-      x: 0,
-      y: 0,
-      width: page.offsetWidth,
-      height: page.scrollHeight,
-      windowWidth: document.documentElement.scrollWidth,
-      windowHeight: page.scrollHeight,
-      logging: false,
-      onclone: (doc) => {
-        // Ensure full height captured in clone
-        doc.querySelector('.page').style.height = 'auto';
-        doc.querySelector('.page').style.overflow = 'visible';
-        doc.body.style.height = 'auto';
-        doc.body.style.overflow = 'visible';
-        // Hide buttons in clone
-        doc.querySelectorAll('button').forEach(b => b.style.display = 'none');
+    // Build a clean data snapshot for the canvas
+    const total = items.length;
+    const avgPct = total ? Math.round(items.reduce((s,i) => s+(i.prog||0),0)/total) : 0;
+    const done   = items.filter(i=>(i.prog||0)===100).length;
+
+    const W = 900, PAD = 48;
+    const ITEM_H = 72;
+    const HEADER_H = 280;
+    const H = HEADER_H + (items.length * (ITEM_H + 10)) + 80;
+
+    const canvas = document.createElement('canvas');
+    canvas.width  = W * 2;
+    canvas.height = H * 2;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(2, 2);
+
+    // Background
+    ctx.fillStyle = '#080f0b';
+    ctx.fillRect(0, 0, W, H);
+
+    // Grid pattern
+    ctx.strokeStyle = 'rgba(57,232,122,0.04)';
+    ctx.lineWidth = 0.5;
+    for(let x=0;x<W;x+=40){ ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke(); }
+    for(let y=0;y<H;y+=40){ ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke(); }
+
+    // Brand icon
+    ctx.fillStyle = '#39e87a';
+    roundRect(ctx, PAD, 36, 28, 28, 7);
+    ctx.fill();
+    ctx.fillStyle = '#080f0b';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚡', PAD+14, 56);
+
+    // Brand name
+    ctx.fillStyle = '#39e87a';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'left';
+    ctx.letterSpacing = '2px';
+    ctx.fillText('MEIRELES & FREITAS', PAD+40, 55);
+
+    // Title
+    ctx.fillStyle = '#e8f5ee';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.fillText('Campanha', PAD, 108);
+    ctx.fillStyle = '#39e87a';
+    ctx.fillText('Marketing MF', PAD, 152);
+
+    // Date
+    const d = new Date();
+    ctx.fillStyle = '#4d7a5e';
+    ctx.font = '11px monospace';
+    ctx.fillText('Atualizado em ' + d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}), PAD, 176);
+
+    // Progress hero box
+    const heroY = 196;
+    ctx.fillStyle = '#111e16';
+    roundRect(ctx, PAD, heroY, W - PAD*2, 64, 12);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(57,232,122,0.16)';
+    ctx.lineWidth = 1;
+    roundRect(ctx, PAD, heroY, W - PAD*2, 64, 12);
+    ctx.stroke();
+
+    // Top accent line on hero
+    ctx.fillStyle = '#39e87a';
+    roundRect(ctx, PAD, heroY, W - PAD*2, 3, 3);
+    ctx.fill();
+
+    // Big percentage
+    ctx.fillStyle = '#39e87a';
+    ctx.font = 'bold 42px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(avgPct + '%', PAD+20, heroY+44);
+
+    // Done count
+    ctx.fillStyle = '#e8f5ee';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(done + ' / ' + total, W-PAD-20, heroY+36);
+    ctx.fillStyle = '#4d7a5e';
+    ctx.font = '11px monospace';
+    ctx.fillText('itens concluídos', W-PAD-20, heroY+52);
+
+    // Progress bar inside hero
+    const barY = heroY + 56;
+    // (bar is cut by hero height, let's put it below)
+
+    // Progress track below hero
+    const trackY = heroY + 74;
+    ctx.fillStyle = '#1d3320';
+    roundRect(ctx, PAD, trackY, W-PAD*2, 8, 4);
+    ctx.fill();
+    const fillW = Math.max(8, (avgPct/100)*(W-PAD*2));
+    const grad = ctx.createLinearGradient(PAD, 0, PAD+fillW, 0);
+    grad.addColorStop(0, '#39e87a');
+    grad.addColorStop(1, '#5aef91');
+    ctx.fillStyle = grad;
+    roundRect(ctx, PAD, trackY, fillW, 8, 4);
+    ctx.fill();
+
+    // Items
+    const listY = trackY + 28;
+    const progColors = p => p===100?'#39e87a':p>=60?'#60b8f5':p>=30?'#f5c842':'#4d7a5e';
+
+    items.forEach((item, idx) => {
+      const iy = listY + idx*(ITEM_H+10);
+      const prog = item.prog||0;
+      const isDone = prog===100;
+      const bColor = progColors(prog);
+
+      // Item box
+      ctx.fillStyle = isDone ? 'rgba(57,232,122,0.05)' : '#0d1a12';
+      roundRect(ctx, PAD, iy, W-PAD*2, ITEM_H, 12);
+      ctx.fill();
+      ctx.strokeStyle = isDone ? 'rgba(57,232,122,0.2)' : 'rgba(57,232,122,0.07)';
+      ctx.lineWidth = 1;
+      roundRect(ctx, PAD, iy, W-PAD*2, ITEM_H, 12);
+      ctx.stroke();
+
+      // Left accent bar
+      ctx.fillStyle = isDone ? '#39e87a' : 'rgba(57,232,122,0.1)';
+      roundRect(ctx, PAD, iy, 3, ITEM_H, 3);
+      ctx.fill();
+
+      // Check circle
+      ctx.strokeStyle = isDone ? '#39e87a' : 'rgba(57,232,122,0.3)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(PAD+16, iy+ITEM_H/2-11, 22, 22, 6);
+      ctx.stroke();
+      if(isDone){
+        ctx.fillStyle = '#39e87a';
+        ctx.beginPath();
+        ctx.roundRect(PAD+16, iy+ITEM_H/2-11, 22, 22, 6);
+        ctx.fill();
+        ctx.fillStyle = '#080f0b';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('✓', PAD+27, iy+ITEM_H/2+5);
       }
+
+      // Item number
+      ctx.fillStyle = '#2e5040';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(String(item.id).padStart(2,'0'), PAD+48, iy+20);
+
+      // Title
+      ctx.fillStyle = isDone ? '#4d7a5e' : '#e8f5ee';
+      ctx.font = isDone ? '13px sans-serif' : 'bold 13px sans-serif';
+      const titleX = PAD+48;
+      const maxW = W - PAD*2 - 160;
+      let title = item.title;
+      ctx.textAlign = 'left';
+      // Truncate if needed
+      while(ctx.measureText(title).width > maxW && title.length > 10) title = title.slice(0,-1);
+      if(title !== item.title) title += '…';
+      ctx.fillText(title, titleX, iy+36);
+
+      // Responsible name
+      if(item.nome){
+        ctx.fillStyle = '#8fbfa0';
+        ctx.font = '10px monospace';
+        ctx.fillText('👤 ' + item.nome, titleX, iy+52);
+      }
+
+      // Progress bar
+      const pbX = titleX, pbY = iy+58, pbW = W-PAD*2-160, pbH = 4;
+      ctx.fillStyle = '#1d3320';
+      roundRect(ctx, pbX, pbY, pbW, pbH, 2);
+      ctx.fill();
+      if(prog > 0){
+        ctx.fillStyle = bColor;
+        roundRect(ctx, pbX, pbY, Math.max(4,(prog/100)*pbW), pbH, 2);
+        ctx.fill();
+      }
+
+      // Percentage text
+      ctx.fillStyle = bColor;
+      ctx.font = 'bold 12px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(prog + '%', pbX + pbW + 8, pbY+10);
+
+      // Status badge
+      const badgeText = isDone ? 'CONCLUÍDO' : prog>0 ? 'ANDAMENTO' : 'PENDENTE';
+      const badgeColor = isDone ? '#39e87a' : prog>0 ? '#60b8f5' : '#4d7a5e';
+      const badgeBg = isDone ? 'rgba(57,232,122,0.1)' : prog>0 ? 'rgba(96,184,245,0.1)' : 'rgba(77,122,94,0.15)';
+      const bw = ctx.measureText(badgeText).width + 16;
+      ctx.fillStyle = badgeBg;
+      roundRect(ctx, W-PAD-bw, iy+16, bw, 20, 10);
+      ctx.fill();
+      ctx.strokeStyle = badgeColor;
+      ctx.lineWidth = 0.5;
+      ctx.globalAlpha = 0.4;
+      roundRect(ctx, W-PAD-bw, iy+16, bw, 20, 10);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = badgeColor;
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(badgeText, W-PAD-bw/2, iy+30);
     });
 
+    // Footer
+    ctx.fillStyle = '#2e5040';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('MEIRELES & FREITAS · ' + d.getFullYear(), PAD, H-20);
+    ctx.textAlign = 'right';
+    ctx.fillText('Gerado em ' + d.toLocaleString('pt-BR'), W-PAD, H-20);
+
+    // Download
     const link = document.createElement('a');
-    const d = new Date();
     const dateStr = d.toLocaleDateString('pt-BR').replace(/\//g,'-');
     link.download = `campanha-mf-${dateStr}.png`;
     link.href = canvas.toDataURL('image/png', 1.0);
     link.click();
+
   } catch(err) {
     alert('Erro ao gerar imagem: ' + err.message);
   } finally {
-    allBtns.forEach(b => b.style.visibility = '');
     btn.innerHTML = original;
     btn.disabled = false;
   }
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r);
+  ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
 }
 
 // ── EXPORTAR PDF ──
