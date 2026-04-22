@@ -175,7 +175,7 @@ select option { background: var(--s3); }
   .brand-icon { background: #39e87a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .brand-name, .campaign-title, .campaign-title span { color: #111 !important; }
   .campaign-title span { color: #1a7a3a !important; }
-  button, [onclick*="exportReport"] { display: none !important; }
+  button { display: none !important; }
   .progress-hero { background: #f8f8f8 !important; border: 1px solid #ddd !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .progress-pct { color: #1a7a3a !important; }
   .progress-fill { background: #39e87a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -206,7 +206,10 @@ select option { background: var(--s3); }
     <div class="campaign-title">Campanha<br><span>Marketing MF</span></div>
     <div class="campaign-sub" id="campaign-sub">— carregando —</div>
     <div style="margin-top:14px;">
-      <button onclick="exportReport()" style="font-family:var(--font);font-size:12px;font-weight:700;padding:8px 16px;border-radius:10px;border:1px solid var(--bs);background:transparent;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .18s;letter-spacing:.03em;" onmouseover="this.style.background='var(--accent-dim)'" onmouseout="this.style.background='transparent'">↓ Exportar relatório</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">
+        <button onclick="exportPNG()" id="btn-png" style="font-family:var(--font);font-size:12px;font-weight:700;padding:8px 16px;border-radius:10px;border:1px solid var(--bs);background:transparent;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .18s;letter-spacing:.03em;" onmouseover="this.style.background='var(--accent-dim)'" onmouseout="this.style.background='transparent'">🖼 Exportar PNG</button>
+        <button onclick="exportReport()" style="font-family:var(--font);font-size:12px;font-weight:700;padding:8px 16px;border-radius:10px;border:1px solid var(--bm);background:transparent;color:var(--ts);cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .18s;letter-spacing:.03em;" onmouseover="this.style.background='var(--accent-dim)'" onmouseout="this.style.background='transparent'">↓ Exportar PDF</button>
+      </div>
     </div>
   </div>
 
@@ -280,6 +283,7 @@ select option { background: var(--s3); }
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 // ── DADOS INICIAIS ──
 const INITIAL_ITEMS = [
@@ -316,6 +320,7 @@ async function loadShared() {
         prog:      Math.min(100, Math.max(0, parseInt(cols[2]) || 0)),
         updatedBy: cols[3] || null,
         updatedAt: cols[4] || null,
+        nome:      cols[5] || null,
         tag:       'normal'
       };
     }).filter(i => i.id > 0);
@@ -384,6 +389,7 @@ function render() {
           <span style="font-size:10px;font-family:var(--mono);color:${barColor};font-weight:700;min-width:30px;text-align:right;">${p}%</span>
         </div>
         <div class="item-meta">
+          ${item.nome ? `<span class="item-resp" style="font-size:11px;font-family:var(--mono);color:var(--ts);">👤 ${item.nome}</span>` : ''}
           ${item.updatedBy ? `<span class="item-done-by">${isDone ? '✓' : '↻'} ${item.updatedBy}</span>` : ''}
           ${item.updatedAt ? `<span class="item-date">${new Date(item.updatedAt).toLocaleDateString('pt-BR')}</span>` : ''}
         </div>
@@ -477,7 +483,50 @@ function launchConfetti() {
 
 // Auto-refresh handled in init setInterval
 
-// ── EXPORTAR ──
+// ── EXPORTAR PNG ──
+async function exportPNG() {
+  const btn = document.getElementById('btn-png');
+  const original = btn.innerHTML;
+  btn.innerHTML = '⏳ Gerando...';
+  btn.disabled = true;
+
+  // Temporarily set light background for screenshot
+  const page = document.querySelector('.page');
+  const body = document.body;
+  const origBodyBg = body.style.background;
+  const origPageBg = page.style.background;
+
+  body.style.background = '#0d1a12';
+
+  try {
+    const canvas = await html2canvas(page, {
+      backgroundColor: '#080f0b',
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      scrollY: -window.scrollY,
+      windowWidth: page.scrollWidth,
+      windowHeight: page.scrollHeight,
+      logging: false
+    });
+
+    const link = document.createElement('a');
+    const d = new Date();
+    const dateStr = d.toLocaleDateString('pt-BR').replace(/\//g,'-');
+    link.download = `campanha-mf-${dateStr}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  } catch(err) {
+    alert('Erro ao gerar imagem: ' + err.message);
+  } finally {
+    body.style.background = origBodyBg;
+    page.style.background = origPageBg;
+    btn.innerHTML = original;
+    btn.disabled = false;
+  }
+}
+
+// ── EXPORTAR PDF ──
 function exportReport() {
   window.print();
 }
